@@ -1,6 +1,6 @@
 /** @fileoverview Tests for Motrix internal deep-link parsing. */
 import { describe, expect, it } from 'vitest'
-import { isMotrixNewTaskLink, isMotrixShowLink, parseMotrixDeepLink } from '../motrixDeepLink'
+import { isMotrixNewTaskLink, parseMotrixDeepLink } from '../motrixDeepLink'
 
 describe('motrixDeepLink', () => {
   it('parses the canonical extension new-task deep link', () => {
@@ -45,16 +45,5 @@ describe('motrixDeepLink', () => {
     expect(parsed.valid).toBe(false)
     expect(parsed.reason).toBe('unsupported-scheme')
     expect(isMotrixNewTaskLink('https://example.com/file.zip')).toBe(false)
-  })
-
-  it('parses show action as navigation-only (no download URL)', () => {
-    const parsed = parseMotrixDeepLink('motrixnext://show')
-
-    expect(parsed.valid).toBe(true)
-    expect(parsed.action).toBe('show')
-    expect(parsed.isNewTask).toBe(false)
-    expect(parsed.downloadUrl).toBe('')
-    expect(isMotrixShowLink('motrixnext://show')).toBe(true)
-    expect(isMotrixNewTaskLink('motrixnext://show')).toBe(false)
   })
 })

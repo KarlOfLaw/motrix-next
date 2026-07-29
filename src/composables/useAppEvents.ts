@@ -16,7 +16,7 @@ import { setEngineReady, isEngineReady } from '@/api/aria2'
 import { detectKind, createBatchItem } from '@shared/utils/batchHelpers'
 import { createExternalInputTraceId, summarizeExternalInputBatch } from '@shared/utils/externalInputDiagnostics'
 import { getErrorMessage } from '@shared/utils/errorMessage'
-import { isMotrixNewTaskLink, isMotrixShowLink } from '@shared/utils/motrixDeepLink'
+import { isMotrixNewTaskLink } from '@shared/utils/motrixDeepLink'
 import type { ExternalDownloadInput } from '@shared/types'
 import { handleTaskStart } from '@/composables/useTaskNotifyHandlers'
 import { onUnmounted, watch, type Ref, type WatchStopHandle } from 'vue'
@@ -119,6 +119,7 @@ interface AppEventsReturn {
     unlistenDeepLink: (() => void) | null
     unlistenExternalInput: (() => void) | null
     unlistenSingleInstance: (() => void) | null
+    unlistenNotificationClick: (() => void) | null
     teardown: () => void
   }>
 }
@@ -607,8 +608,7 @@ export function useAppEvents(deps: AppEventsDeps): AppEventsReturn {
     // extension.  Always land on /task/all regardless of current sub-tab
     // (active, stopped, etc.) so the user sees the full task list.
     const hasNewTask = urls.some(isMotrixNewTaskLink)
-    const hasShowAction = urls.some(isMotrixShowLink)
-    if (!silent && (hasNewTask || hasShowAction) && route.path !== '/task/all') {
+    if (!silent && hasNewTask && route.path !== '/task/all') {
       try {
         await router.push('/task/all')
         logger.debug('ExternalInput', formatLogFields({ traceId, stage: 'navigate', result: 'ok', route: '/task/all' }))
@@ -619,17 +619,6 @@ export function useAppEvents(deps: AppEventsDeps): AppEventsReturn {
           formatLogFields({ traceId, stage: 'navigate', result: 'failed', route: '/task/all', reason }),
         )
       }
-    }
-
-    // motrixnext://show is a navigation-only action (used by Windows
-    // notification click).  No download task should be created — return
-    // early after surfacing the window and navigating.
-    if (hasShowAction && !hasNewTask) {
-      logger.info('ExternalInput', formatLogFields({ traceId, stage: 'show-action', result: 'ok' }))
-      if (silent) {
-        await scheduleSilentLightweightCleanup(traceId)
-      }
-      return
     }
 
     logger.info('ExternalInput', formatLogFields({ traceId, stage: 'route-download', result: 'start' }))
@@ -780,6 +769,23 @@ export function useAppEvents(deps: AppEventsDeps): AppEventsReturn {
     const unlistenMenuEvent = await setupMenuListener()
     const unlistenTrayMenu = await setupTrayListener()
 
+    // Windows notification click → navigate to downloads page.
+    // The Rust backend emits this event from the toast's on_activated
+    // callback after activating the main window.
+    const unlistenNotificationClick = registerCleanup(
+      await listen('notification-click', async () => {
+        logger.info('NotificationClick', 'navigating to /task/all')
+        if (route.path !== '/task/all') {
+          try {
+            await router.push('/task/all')
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error)
+            logger.warn('NotificationClick', `navigation failed: ${reason}`)
+          }
+        }
+      }),
+    )
+
     // After all listeners are registered, consume any deep-link URLs
     // queued by Rust during window recreation (lightweight mode timing gap).
     // Normal startups return an empty array — this is a no-op.
@@ -827,6 +833,7 @@ export function useAppEvents(deps: AppEventsDeps): AppEventsReturn {
       unlistenDeepLink,
       unlistenExternalInput,
       unlistenSingleInstance,
+      unlistenNotificationClick,
       teardown,
     }
   }

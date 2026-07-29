@@ -451,12 +451,8 @@ fn send_platform_notification(
     })
 }
 
-/// Deep-link URL used to navigate to the downloads page when a
-/// notification is clicked.  The frontend's `processIncomingDeepLinks`
-/// handler recognizes this as a navigation-only action (no download task
-/// is created).
 #[cfg(target_os = "windows")]
-const NOTIFICATION_CLICK_DEEP_LINK: &str = "motrixnext://show";
+use tauri::Emitter;
 
 #[cfg(target_os = "windows")]
 fn send_platform_notification(
@@ -479,16 +475,15 @@ fn send_platform_notification(
             .on_activated(move |_action: Option<String>| {
                 log::info!("notification:click-activated");
 
-                // Route a motrixnext://show deep link through the existing
-                // deep-link dispatch system.  This handles all window
-                // states: visible, hidden, and lightweight-mode (WebView
-                // destroyed).  The frontend's processIncomingDeepLinks
-                // handler will navigate to /task/all.
-                crate::services::deep_link::route_external_inputs(
-                    &app_for_callback,
-                    vec![NOTIFICATION_CLICK_DEEP_LINK.to_string()],
-                    "notification-click",
-                );
+                // Activate the main window, then emit a lightweight event
+                // for the frontend to navigate to /task/all.  This avoids
+                // touching the deep-link system entirely, preventing any
+                // interference with browser-extension download flows.
+                let app_for_wake = app_for_callback.clone();
+                let _ = app_for_callback.run_on_main_thread(move || {
+                    crate::tray::activate_main_window(&app_for_wake, "notification-click");
+                });
+                let _ = app_for_callback.emit("notification-click", ());
 
                 Ok(())
             });

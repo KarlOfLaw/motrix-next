@@ -1,6 +1,6 @@
 /** @fileoverview Parser for Motrix internal deep-link inputs. */
 
-export type MotrixDeepLinkAction = 'new' | 'show' | 'none' | 'unknown'
+export type MotrixDeepLinkAction = 'new' | 'none' | 'unknown'
 export type MotrixDeepLinkFailureReason = 'unsupported-scheme' | 'malformed'
 
 export interface ParsedMotrixDeepLink {
@@ -30,10 +30,7 @@ function hasMotrixScheme(value: string): boolean {
 
 function normalizeAction(value: string): MotrixDeepLinkAction {
   if (!value) return 'none'
-  const lower = value.toLowerCase()
-  if (lower === 'new') return 'new'
-  if (lower === 'show') return 'show'
-  return 'unknown'
+  return value.toLowerCase() === 'new' ? 'new' : 'unknown'
 }
 
 function getFirstPathSegment(pathname: string): string {
@@ -93,11 +90,4 @@ export function parseMotrixDeepLink(value: string): ParsedMotrixDeepLink {
 
 export function isMotrixNewTaskLink(value: string): boolean {
   return parseMotrixDeepLink(value).isNewTask
-}
-
-/** Returns true when the deep link is a navigation-only "show" action
- *  (used by Windows notification click to jump to the downloads page
- *  without creating a download task). */
-export function isMotrixShowLink(value: string): boolean {
-  return parseMotrixDeepLink(value).action === 'show'
 }
